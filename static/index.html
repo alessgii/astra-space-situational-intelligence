@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASTRA - Space Situational Intelligence</title>
+    
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        space: { 950: '#07050f', 900: '#0d0a1c', 800: '#16112e', 700: '#231b45' },
+                        astra: { 400: '#38bdf8', 500: '#0ea5e9' },
+                        cosmic: { 400: '#c084fc', 500: '#a855f7', 600: '#9333ea', 900: '#3b0764' }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'ui-monospace', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/custom.css">
+</head>
+<body class="bg-space-950 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-space-900 via-space-950 to-cosmic-900/30 text-slate-300 font-sans antialiased min-h-screen flex flex-col selection:bg-cosmic-500 selection:text-white">
+
+    <!-- HEADER -->
+    <header class="border-b border-space-800/80 bg-space-900/60 backdrop-blur-md sticky top-0 z-50 shadow-[0_4px_30px_rgba(147,51,234,0.05)]">
+        <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <!-- Logo  -->
+                    <svg class="w-6 h-6 text-cosmic-400" fill="none" stroke="url(#cosmic-gradient)" viewBox="0 0 24 24">
+                        <defs>
+                            <linearGradient id="cosmic-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#38bdf8" />
+                                <stop offset="100%" stop-color="#c084fc" />
+                            </linearGradient>
+                        </defs>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                    </svg>
+                    <h1 class="text-xl font-semibold text-white tracking-wide">ASTRA<span class="text-cosmic-400 font-light"> - SSI</span></h1>
+                </div>
+                <!-- IBM Bob Span -->
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono tracking-widest font-semibold uppercase bg-cosmic-900/50 text-cosmic-300 border border-cosmic-500/30 shadow-[0_0_10px_rgba(168,85,247,0.2)]">
+                    IBM Bob
+                </span>
+            </div>
+            
+            <div class="flex items-center gap-6 text-sm text-slate-400">
+                <nav class="hidden md:flex gap-4">
+                    <a href="#" class="hover:text-white transition-colors">Home</a>
+                    <a href="#" class="hover:text-white transition-colors">Sources</a>
+                </nav>
+                <!-- System Status -->
+                <div class="flex items-center gap-2 px-3 py-1 bg-space-800 rounded-full border border-space-700/80 shadow-[0_0_10px_rgba(147,51,234,0.1)]">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span class="text-xs font-mono text-slate-300">Systems online</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-grow max-w-5xl mx-auto w-full px-4 py-12 flex flex-col gap-12 relative">
+        
+        <div class="absolute top-10 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-cosmic-600/10 blur-[100px] pointer-events-none rounded-full"></div>
+
+        <!-- SEARCH / HERO SECTION -->
+        <section class="flex flex-col gap-6 max-w-3xl mx-auto w-full text-center relative z-10">
+            <div class="space-y-2">
+                <h2 class="text-3xl md:text-4xl font-semibold text-white">Explore what's happening in space</h2>
+                <p class="text-slate-400">Ask about solar activity, near-Earth asteroids, and visible comets using natural language.</p>
+            </div>
+
+            <!-- Query Box -->
+            <div class="bg-space-900/80 backdrop-blur border border-space-700 rounded-2xl p-2 shadow-2xl focus-within:border-cosmic-500/60 focus-within:shadow-[0_0_30px_rgba(168,85,247,0.15)] transition-all duration-300 relative group">
+                <textarea id="query-input" rows="1" class="w-full bg-transparent text-white placeholder-slate-500 p-4 outline-none resize-none overflow-hidden block" placeholder="What do you want to know about space?"></textarea>
+                
+                <div class="flex justify-between items-center px-2 pb-2">
+                    <!-- Location -->
+                    <button id="btn-location" class="flex items-center gap-2 text-xs md:text-sm text-slate-400 hover:text-cosmic-400 transition-colors px-2 py-1 rounded bg-space-800/50">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        <span id="location-text">Detect my location</span>
+                    </button>
+                    
+                    <!-- Submit Button -->
+                    <button id="btn-submit" class="bg-gradient-to-r from-astra-500 to-cosmic-600 hover:from-astra-400 hover:to-cosmic-500 text-white rounded-xl p-2 md:px-4 md:py-2 flex items-center gap-2 font-medium transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] border border-white/10">
+                        <span class="hidden md:inline">Ask ASTRA</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Queries -->
+            <div class="flex flex-wrap justify-center gap-2 mt-2">
+                <button class="quick-query bg-space-800/60 hover:bg-space-700 hover:border-cosmic-500/50 border border-space-700 text-sm text-slate-300 px-4 py-2 rounded-full transition-all flex items-center gap-2" data-query="What solar activity is expected over the next few days?">
+                    <span>☀️</span> Solar storms
+                </button>
+                <button class="quick-query bg-space-800/60 hover:bg-space-700 hover:border-cosmic-500/50 border border-space-700 text-sm text-slate-300 px-4 py-2 rounded-full transition-all flex items-center gap-2" data-query="Which asteroids will have a close approach to Earth this week?">
+                    <span>☄️</span> Near-Earth asteroids
+                </button>
+                <button class="quick-query bg-space-800/60 hover:bg-space-700 hover:border-cosmic-500/50 border border-space-700 text-sm text-slate-300 px-4 py-2 rounded-full transition-all flex items-center gap-2" data-query="What comets can I observe from my location?">
+                    <span>🌠</span> Visible comets
+                </button>
+            </div>
+        </section>
+
+        <!-- DYNAMIC AREA -->
+        <section id="initial-state" class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto w-full opacity-100 transition-opacity duration-300">
+            <div class="bg-space-900/50 border border-space-800 hover:border-cosmic-500/30 hover:bg-space-800/40 rounded-xl p-6 flex flex-col gap-3 transition-all">
+                <div class="text-2xl drop-shadow-[0_0_8px_rgba(255,215,0,0.4)]">☀️</div>
+                <h3 class="text-white font-medium">Solar Activity</h3>
+                <p class="text-sm text-slate-400">Monitor geomagnetic storms, solar flares, and their impact on telecommunications.</p>
+            </div>
+            <div class="bg-space-900/50 border border-space-800 hover:border-cosmic-500/30 hover:bg-space-800/40 rounded-xl p-6 flex flex-col gap-3 transition-all">
+                <div class="text-2xl drop-shadow-[0_0_8px_rgba(168,85,247,0.4)]">☄️</div>
+                <h3 class="text-white font-medium">Asteroids (NEAs)</h3>
+                <p class="text-sm text-slate-400">Explore near-Earth objects, approach distances, and risk classifications.</p>
+            </div>
+            <div class="bg-space-900/50 border border-space-800 hover:border-cosmic-500/30 hover:bg-space-800/40 rounded-xl p-6 flex flex-col gap-3 transition-all">
+                <div class="text-2xl drop-shadow-[0_0_8px_rgba(56,189,248,0.4)]">🌠</div>
+                <h3 class="text-white font-medium">Comets</h3>
+                <p class="text-sm text-slate-400">Discover potentially observable comets based on magnitude and illumination.</p>
+            </div>
+        </section>
+
+        <!-- DYNAMIC AREA: Processing State -->
+        <section id="processing-state" class="hidden flex-col items-center justify-center gap-4 max-w-xl mx-auto py-12">
+            <div class="relative w-16 h-16 flex items-center justify-center">
+                <div class="absolute inset-0 border-4 border-space-800 border-t-cosmic-500 rounded-full animate-spin"></div>
+                <div class="absolute inset-2 border-4 border-space-800/50 border-b-astra-500 rounded-full animate-[spin_1.5s_reverse_infinite]"></div>
+                <svg class="w-5 h-5 text-cosmic-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+            </div>
+            <div class="flex flex-col items-center gap-2 text-sm text-slate-400 font-mono" id="processing-steps">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+
+        <!-- DYNAMIC AREA: Results -->
+        <section id="results-state" class="hidden flex-col gap-8 max-w-4xl mx-auto w-full relative">
+            
+            <!-- Agent Interpretation -->
+            <div class="bg-space-900/60 backdrop-blur border border-space-700/50 rounded-2xl p-6 md:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+                <div class="flex items-start justify-between gap-4 mb-4">
+                    <div class="flex items-center gap-2 text-cosmic-400 mb-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                        <h3 class="text-sm font-semibold uppercase tracking-wider">ASTRA Analysis</h3>
+                    </div>
+                    <!-- Risk Indicator -->
+                    <div id="risk-badge" class="hidden px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm"></div>
+                </div>
+                
+                <h4 id="result-title" class="text-xl md:text-2xl font-medium text-white mb-4"></h4>
+                <p id="result-answer" class="text-slate-300 leading-relaxed whitespace-pre-wrap"></p>
+            </div>
+
+            <!-- Scientific Data -->
+            <div>
+                <h3 class="text-sm font-mono text-cosmic-300/80 mb-4 px-2 uppercase tracking-wide">Scientific Data Retrieved</h3>
+                <div id="data-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Cards injected via JS -->
+                </div>
+            </div>
+
+            <!-- Sources -->
+            <div class="border-t border-space-800 pt-4 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-slate-500 font-mono">
+                <div class="flex items-center gap-2">
+                    <span>Sources used:</span>
+                    <div id="sources-list" class="flex gap-2">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+                <div id="update-time"></div>
+            </div>
+        </section>
+
+        <!-- DYNAMIC AREA: Error -->
+        <section id="error-state" class="hidden max-w-2xl mx-auto w-full bg-red-950/20 border border-red-900/50 rounded-xl p-6 text-center backdrop-blur">
+            <svg class="w-12 h-12 text-red-500/80 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            <h3 class="text-lg font-medium text-white mb-2">We couldn't process your query</h3>
+            <p id="error-message" class="text-red-300/80 mb-6 text-sm">One of the space data sources is currently unavailable.</p>
+            <button id="btn-retry" class="bg-space-800 hover:bg-space-700 hover:border-cosmic-500/50 border border-space-600 text-white px-4 py-2 rounded-lg text-sm transition-all shadow-[0_0_10px_rgba(0,0,0,0.3)]">Try again</button>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-space-800/80 mt-auto bg-space-950/80 backdrop-blur">
+        <div class="max-w-5xl mx-auto px-4 py-6 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500">
+            <p>ASTRA - AI IBM August challenge</p>
+            <p>Designed for space monitoring via natural language.</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="js/app.js"></script>
+</body>
+</html>
