@@ -1,0 +1,7 @@
+uvicorn
+FastAPI
+httpx
+pydantic
+python-dotenv
+ibm-watsonx-ai
+typing
