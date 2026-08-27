@@ -3,3 +3,5 @@ venv/
 .env
 agent_test.py
 systemprompt.txt
+tests/
+app.py
