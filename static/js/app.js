@@ -25,51 +25,20 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- GLOBAL STATE ---
     let userLocation = { latitude: null, longitude: null };
 
-    // --- MOCK RESPONSES (To be replaced with your FastAPI backend) ---
-    const MOCK_API = {
-        solar: {
-            title: "Moderate Solar Activity",
-            answer: "Over the next few days, moderate solar activity is expected. Current data does not indicate a widespread disruption of telecommunications, although certain high-frequency radio systems and satellite communications could experience minor interference during intense events.",
-            category: "space_weather",
-            risk: { level: "moderate", label: "Moderate" },
-            data: [
-                { label: "Latest Activity", value: "Class X1.2 Flare" },
-                { label: "Geomagnetic Index", value: "G2 (Moderate)" },
-                { label: "Sunspots (AR)", value: "3 Active Regions" },
-                { label: "Solar Wind Speed", value: "540 km/s" }
-            ],
-            sources: ["NOAA", "NASA SDO"],
-            updated_at: new Date().toISOString()
-        },
-        asteroid: {
-            title: "No Imminent Impact Risk",
-            answer: "This week, asteroid 2026 AB12 will have a close approach to Earth, passing safely at about 2.7 million kilometers (approximately 7 times the distance to the Moon). It poses no impact danger, although it is classified as a Potentially Hazardous Asteroid (PHA) due to its size.",
-            category: "nea",
-            risk: { level: "low", label: "Low" },
-            data: [
-                { label: "Designation", value: "2026 AB12" },
-                { label: "Approach Date", value: "Aug 24, 2026" },
-                { label: "Miss Distance", value: "0.018 AU" },
-                { label: "Est. Diameter", value: "80 – 180 m" }
-            ],
-            sources: ["CNEOS NASA", "JPL Horizons"],
-            updated_at: new Date().toISOString()
-        },
-        comet: {
-            title: "Comet C/2026 X1 Visible with Binoculars",
-            answer: "From your current location, comet C/2026 X1 will be observable just before dawn by looking East. It currently has a magnitude of 5.8, meaning it will be visible using standard binoculars if you move away from city light pollution.",
-            category: "comets",
-            risk: null, // No risk associated
-            data: [
-                { label: "Designation", value: "C/2026 X1" },
-                { label: "Est. Magnitude", value: "5.8" },
-                { label: "Best Time", value: "04:30 AM (Local)" },
-                { label: "Direction", value: "East (Elevation 15°)" }
-            ],
-            sources: ["Minor Planet Center", "OpenAstronomy"],
-            updated_at: new Date().toISOString()
-        }
+    // --- FLARE RISK CLASSIFICATION (matches NASA DONKI class scale: A < B < C < M < X) ---
+    const FLARE_RISK_BY_CLASS = {
+        A: { level: "low", label: "Low" },
+        B: { level: "low", label: "Low" },
+        C: { level: "moderate", label: "Moderate" },
+        M: { level: "high", label: "High" },
+        X: { level: "critical", label: "Critical" }
     };
+
+    function classifyFlareRisk(classType) {
+        if (!classType) return null;
+        const letter = classType.trim().charAt(0).toUpperCase();
+        return FLARE_RISK_BY_CLASS[letter] || null;
+    }
 
     // --- EVENT LISTENERS ---
 
@@ -104,20 +73,42 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // Geolocation (Simulated/Optional)
+    // Geolocation (real, via browser API)
     btnLocation.addEventListener('click', () => {
+        if (!('geolocation' in navigator)) {
+            locationText.textContent = "Geolocation not supported";
+            return;
+        }
+
         locationText.textContent = "Getting location...";
         btnLocation.classList.add('animate-pulse');
-        
-        // Simulate geolocation API delay
-        setTimeout(() => {
-            userLocation = { latitude: 19.0, longitude: -103.7 };
-            locationText.textContent = "📍 Location detected";
-            btnLocation.classList.remove('animate-pulse');
-            btnLocation.classList.remove('text-slate-400');
-            // Adding cosmic purple styles for the active state
-            btnLocation.classList.add('text-cosmic-400', 'bg-cosmic-900/30', 'border', 'border-cosmic-500/30');
-        }, 1200);
+        btnLocation.disabled = true;
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                userLocation = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude
+                };
+                locationText.textContent = "📍 Location detected";
+                btnLocation.classList.remove('animate-pulse');
+                btnLocation.classList.remove('text-slate-400');
+                // Adding cosmic purple styles for the active state
+                btnLocation.classList.add('text-cosmic-400', 'bg-cosmic-900/30', 'border', 'border-cosmic-500/30');
+                btnLocation.disabled = false;
+            },
+            (error) => {
+                btnLocation.classList.remove('animate-pulse');
+                btnLocation.disabled = false;
+                const messages = {
+                    1: "Location access denied",
+                    2: "Location unavailable",
+                    3: "Location request timed out"
+                };
+                locationText.textContent = messages[error.code] || "Could not get location";
+            },
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+        );
     });
 
     // --- PROCESSING LOGIC ---
@@ -155,7 +146,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
         try {
             const response = await apiRequest;
-            const payload = await response.json();
+            const rawBody = await response.text();
+
+            let payload;
+            try {
+                payload = rawBody ? JSON.parse(rawBody) : {};
+            } catch (parseError) {
+                // The server didn't return JSON (e.g. an unhandled crash returning
+                // a plain-text/HTML error page). Surface the raw body so it's
+                // debuggable instead of a cryptic "unexpected character" message.
+                throw new Error(
+                    `The server returned a non-JSON response (status ${response.status}): ` +
+                    rawBody.slice(0, 200)
+                );
+            }
 
             if (!response.ok) {
                 const detail = Array.isArray(payload.detail)
@@ -171,23 +175,48 @@ document.addEventListener("DOMContentLoaded", () => {
                 unknown: "Space query received"
             };
 
-            renderResults({
-                title: domainLabels[payload.intent.domain] || domainLabels.unknown,
-                answer: payload.answer,
-                category: payload.intent.domain,
-                risk: null,
-                data: [
-                    { label: "Status", value: payload.status },
-                    { label: "Detected domain", value: payload.intent.domain },
-                    { label: "Tool used", value: payload.tool_used || payload.intent.suggested_tool || "None" },
-                    { label: "Request ID", value: payload.request_id }
-                ],
-                sources: payload.tool_used ? ["IBM watsonx", "NASA DONKI"] : ["ASTRA API"],
-                updated_at: payload.received_at
-            });
+            renderResults(buildResultViewModel(payload, domainLabels));
         } catch (error) {
             showError(error.message || "The ASTRA API is currently unavailable.");
         }
+    }
+
+    function buildResultViewModel(payload, domainLabels) {
+        const title = domainLabels[payload.intent.domain] || domainLabels.unknown;
+        const toolResult = payload.tool_result;
+
+        // Default (generic) metadata — used when watsonx answered without calling a tool,
+        // or when watsonx.ai isn't configured on the server yet.
+        let data = [
+            { label: "Status", value: payload.status },
+            { label: "Detected domain", value: payload.intent.domain },
+            { label: "Tool used", value: payload.tool_used || payload.intent.suggested_tool || "None" },
+            { label: "Request ID", value: payload.request_id }
+        ];
+        let sources = payload.tool_used ? ["IBM watsonx"] : ["ASTRA API"];
+        let risk = null;
+
+        // Richer view when the space-weather tool actually ran (get_space_weather -> NASA DONKI)
+        if (payload.tool_used === "get_space_weather" && toolResult) {
+            data = [
+                { label: "Period queried", value: `${toolResult.query_start} → ${toolResult.query_end}` },
+                { label: "Flares observed", value: String(toolResult.event_count) },
+                { label: "Strongest class", value: toolResult.strongest_class || "None detected" },
+                { label: "Source", value: toolResult.source }
+            ];
+            sources = ["IBM watsonx", toolResult.source];
+            risk = classifyFlareRisk(toolResult.strongest_class);
+        }
+
+        return {
+            title,
+            answer: payload.answer,
+            category: payload.intent.domain,
+            risk,
+            data,
+            sources,
+            updated_at: payload.received_at
+        };
     }
 
     function showProcessingSteps(steps) {

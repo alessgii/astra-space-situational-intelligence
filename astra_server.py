@@ -13,16 +13,23 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
 
+import logging
+
 import httpx
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, validator
 from dotenv import load_dotenv
+
+logger = logging.getLogger("astra")
 
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 load_dotenv(BASE_DIR / ".env")
+
+logging.basicConfig(level=logging.INFO)
 
 
 class SpaceDomain(str, Enum):
@@ -117,8 +124,8 @@ SPACE_WEATHER_TOOL = {
     "function": {
         "name": "get_space_weather",
         "description": (
-            "Consulta llamaradas solares OBSERVADAS recientemente en NASA DONKI. "
-            "No es un pronóstico de llamaradas futuras."
+            "Queries OBSERVED solar flares recently recorded in NASA DONKI. "
+            "This is not a forecast of future flares."
         ),
         "parameters": {
             "type": "object",
@@ -127,7 +134,7 @@ SPACE_WEATHER_TOOL = {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 30,
-                    "description": "Número de días recientes que se consultarán.",
+                    "description": "Number of recent days to query.",
                 }
             },
             "required": ["days"],
@@ -136,13 +143,15 @@ SPACE_WEATHER_TOOL = {
     },
 }
 
-AGENT_SYSTEM_PROMPT = """Eres ASTRA, un asistente de inteligencia situacional espacial.
-Responde en el idioma del usuario. Usa get_space_weather cuando necesites llamaradas
-solares observadas. No presentes observaciones históricas como pronósticos. Si preguntan
-por el futuro, explica que DONKI no predice llamaradas y limita tus conclusiones a los
-datos disponibles. Sé breve, indica fechas, clase de la llamarada y posibles limitaciones.
+AGENT_SYSTEM_PROMPT = """"You are ASTRA, a space situational intelligence assistant. 
+Respond in the user's language. Use get_space_weather when you need observed solar flares. 
+This tool ONLY queries the past (days that have already passed), never the future.
+ If the user asks about 'this week', 'the past few days', or a similar range, interpret that as days=7 
+ (or the number of days elapsed from the start of that week until today) and always use an integer between 1 and 30. 
+ Never leave days empty, as non-numeric text, or outside that range. Do not present historical observations as forecasts.
+  If they ask about the future, explain that DONKI does not predict flares and limit your conclusions to the available data.
+   Be brief, state dates, flare class, and potential limitations."
 """
-
 
 def detect_intent(message: str) -> Intent:
     """Provide a lightweight hint; watsonx will make the final tool decision."""
@@ -216,12 +225,12 @@ async def fetch_donki_flares(start_date: date, end_date: date) -> list[dict[str,
             response.raise_for_status()
             payload = response.json()
     except httpx.TimeoutException as error:
-        raise HTTPException(status_code=503, detail="NASA DONKI tardó demasiado en responder.") from error
+        raise HTTPException(status_code=503, detail="NASA DONKI took too long to respond.") from error
     except (httpx.HTTPError, ValueError) as error:
-        raise HTTPException(status_code=502, detail="No fue posible obtener datos válidos de NASA DONKI.") from error
+        raise HTTPException(status_code=502, detail="Could not retrieve valid data from NASA DONKI.") from error
 
     if not isinstance(payload, list):
-        raise HTTPException(status_code=502, detail="NASA DONKI devolvió un formato inesperado.")
+        raise HTTPException(status_code=502, detail="NASA DONKI returned an unexpected format.")
     return payload
 
 
@@ -232,10 +241,10 @@ async def get_space_weather_result(days: int) -> SolarFlareResponse:
     strongest = max(events, key=lambda event: flare_strength(event.class_type), default=None)
 
     summary = (
-        f"NASA DONKI registró {len(events)} llamarada(s) solar(es) entre "
-        f"{start_date.isoformat()} y {end_date.isoformat()}."
+        f"NASA DONKI recorded {len(events)} solar flare(s) between "
+        f"{start_date.isoformat()} and {end_date.isoformat()}."
         if events
-        else "NASA DONKI no registró llamaradas solares en el intervalo consultado."
+        else "NASA DONKI recorded no solar flares in the queried interval."
     )
     return SolarFlareResponse(
         source="NASA DONKI",
@@ -265,18 +274,29 @@ def create_watsonx_model():
     except ImportError as error:
         raise HTTPException(
             status_code=503,
-            detail="Falta instalar la dependencia ibm-watsonx-ai.",
+            detail="The ibm-watsonx-ai dependency is not installed.",
         ) from error
 
     credentials = Credentials(
         url=os.environ["WATSONX_URL"],
         api_key=os.environ["IBM_CLOUD_API_KEY"],
     )
-    return ModelInference(
-        model_id=os.getenv("WATSONX_MODEL_ID", "ibm/granite-3-3-8b-instruct"),
-        credentials=credentials,
-        project_id=os.environ["WATSONX_PROJECT_ID"],
-    )
+    try:
+        return ModelInference(
+            model_id=os.getenv("WATSONX_MODEL_ID", "ibm/granite-4-h-small"),
+            credentials=credentials,
+            project_id=os.environ["WATSONX_PROJECT_ID"],
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Could not initialise the watsonx model. Ensure that "
+                "WATSONX_MODEL_ID is a model supported in your project/region "
+                "and that the project_id has an associated Watson Machine "
+                f"Learning instance. Detail: {error}"
+            ),
+        ) from error
 
 
 async def watsonx_chat(model, messages: list[dict[str, Any]]) -> dict[str, Any]:
@@ -290,7 +310,7 @@ async def watsonx_chat(model, messages: list[dict[str, Any]]) -> dict[str, Any]:
     except Exception as error:
         raise HTTPException(
             status_code=502,
-            detail="watsonx no pudo procesar la consulta.",
+            detail="watsonx could not process the request.",
         ) from error
 
 
@@ -304,24 +324,33 @@ async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[
     try:
         assistant_message = first_response["choices"][0]["message"]
     except (KeyError, IndexError, TypeError) as error:
-        raise HTTPException(status_code=502, detail="watsonx devolvió una respuesta inesperada.") from error
+        raise HTTPException(status_code=502, detail="watsonx returned an unexpected response.") from error
 
     tool_calls = assistant_message.get("tool_calls") or []
     if not tool_calls:
-        return (assistant_message.get("content") or "Sin respuesta del modelo.", None, None)
+        return (assistant_message.get("content") or "No response from the model.", None, None)
 
     tool_call = tool_calls[0]
     function = tool_call.get("function") or {}
     if function.get("name") != "get_space_weather":
-        raise HTTPException(status_code=502, detail="watsonx solicitó una herramienta no permitida.")
+        raise HTTPException(status_code=502, detail="watsonx requested a disallowed tool.")
 
     try:
-        arguments = json.loads(function.get("arguments") or "{}")
-        days = int(arguments["days"])
+        raw_arguments = function.get("arguments") or "{}"
+        arguments = json.loads(raw_arguments)
+        # granite-4-h-small sometimes double-encodes the arguments: the first
+        # json.loads() yields a JSON string instead of a dict, so parse again.
+        if isinstance(arguments, str):
+            arguments = json.loads(arguments)
+        days = int(float(arguments["days"]))
         if not 1 <= days <= 30:
             raise ValueError
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-        raise HTTPException(status_code=502, detail="watsonx generó argumentos de herramienta inválidos.") from error
+        logger.error(
+            "Invalid tool_call arguments for get_space_weather: %r",
+            function.get("arguments"),
+        )
+        raise HTTPException(status_code=502, detail="watsonx generated invalid tool arguments.") from error
 
     tool_result_model = await get_space_weather_result(days)
     tool_result = tool_result_model.model_dump(mode="json")
@@ -340,7 +369,7 @@ async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[
     try:
         answer = final_response["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as error:
-        raise HTTPException(status_code=502, detail="watsonx no generó una respuesta final válida.") from error
+        raise HTTPException(status_code=502, detail="watsonx did not generate a valid final response.") from error
     return (answer, "get_space_weather", tool_result)
 
 
@@ -349,6 +378,21 @@ app = FastAPI(
     version="0.1.0",
     description="Receives natural-language space queries for later watsonx processing.",
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Guarantee JSON responses even for bugs we didn't anticipate.
+
+    Without this, an uncaught exception falls through to Starlette's default
+    handler, which returns a *plain text* 500 response — that breaks any
+    frontend doing `await response.json()`.
+    """
+    logger.exception("Unhandled error while processing %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An unexpected internal error occurred in the ASTRA server."},
+    )
 
 
 @app.get("/api/health")
@@ -381,7 +425,7 @@ async def receive_question(payload: ChatRequest) -> ChatResponse:
         received_message=payload.message,
         intent=intent,
         next_action="configure_watsonx_credentials",
-        answer="La integración está lista, pero faltan las credenciales de watsonx en el servidor.",
+        answer="The integration is ready, but watsonx credentials are missing on the server.",
         received_at=datetime.now(timezone.utc),
     )
 
