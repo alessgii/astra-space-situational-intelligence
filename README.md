@@ -31,7 +31,6 @@ ASTRA/
 │   └── index.html
 ├── .env.example
 ├── .gitignore
-├── agent_test.py
-├── app.py
+├── astra_server.py
 ├── README.md
 └── requirements.txt

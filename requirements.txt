@@ -1,6 +1,6 @@
-uvicorn
-FastAPI
+fastapi
+uvicorn[standard]
 httpx
 pydantic
-ibm-watsonx-ai
-typing
+python-dotenv
+aiofiles
