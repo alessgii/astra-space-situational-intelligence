@@ -97,6 +97,33 @@ class SolarFlareResponse(BaseModel):
     fetched_at: datetime
 
 
+class AsteroidEvent(BaseModel):
+    id: str
+    name: str
+    absolute_magnitude: Optional[float] = None
+    estimated_diameter_min_meters: Optional[float] = None
+    estimated_diameter_max_meters: Optional[float] = None
+    potentially_hazardous: bool
+    close_approach_date: date
+    relative_velocity_kph: Optional[float] = None
+    miss_distance_kilometers: Optional[float] = None
+    orbiting_body: Optional[str] = None
+    source_url: Optional[str] = None
+
+
+class AsteroidResponse(BaseModel):
+    source: str
+    query_start: date
+    query_end: date
+    upcoming_events_only: bool
+    event_count: int
+    hazardous_count: int
+    closest_asteroid: Optional[str] = None
+    summary: str
+    events: list[AsteroidEvent]
+    fetched_at: datetime
+
+
 DOMAIN_KEYWORDS = {
     SpaceDomain.SPACE_WEATHER: {
         "solar", "sol", "llamarada", "llamaradas", "tormenta solar",
@@ -143,14 +170,40 @@ SPACE_WEATHER_TOOL = {
     },
 }
 
-AGENT_SYSTEM_PROMPT = """"You are ASTRA, a space situational intelligence assistant. 
-Respond in the user's language. Use get_space_weather when you need observed solar flares. 
+NEAR_EARTH_OBJECTS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_near_earth_objects",
+        "description": (
+            "Queries near-Earth asteroid approaches from today onward using NASA NeoWs. "
+            "The query window can contain at most 7 days."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7,
+                    "description": "Number of days to query, including today.",
+                }
+            },
+            "required": ["days"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+AGENT_SYSTEM_PROMPT = """You are ASTRA, a space situational intelligence assistant.
+Respond in the user's language. Use get_space_weather when you need observed solar flares.
 This tool ONLY queries the past (days that have already passed), never the future.
- If the user asks about 'this week', 'the past few days', or a similar range, interpret that as days=7 
- (or the number of days elapsed from the start of that week until today) and always use an integer between 1 and 30. 
- Never leave days empty, as non-numeric text, or outside that range. Do not present historical observations as forecasts.
-  If they ask about the future, explain that DONKI does not predict flares and limit your conclusions to the available data.
-   Be brief, state dates, flare class, and potential limitations."
+If the user asks about 'this week', 'the past few days', or a similar range, interpret that as days=7
+(or the number of days elapsed from the start of that week until today) and always use an integer between 1 and 30.
+Never leave days empty, as non-numeric text, or outside that range. Do not present historical observations as forecasts.
+If they ask about future solar flares, explain that DONKI does not predict them and limit your conclusions to available data.
+Use get_near_earth_objects for near-Earth asteroid approaches. It queries from today onward and requires days between 1 and 7.
+Do not imply that a potentially hazardous classification means an impact is predicted.
+Be brief, state dates, relevant measurements, sources, and potential limitations.
 """
 
 def detect_intent(message: str) -> Intent:
@@ -213,6 +266,52 @@ def compact_flares(raw_events: list[dict[str, Any]]) -> list[SolarFlareEvent]:
     )
 
 
+def compact_asteroids(raw_events: dict[str, list[dict[str, Any]]]) -> list[AsteroidEvent]:
+    events: list[AsteroidEvent] = []
+    for approach_date, asteroids in raw_events.items():
+        for asteroid in asteroids:
+            diameter = asteroid.get("estimated_diameter", {}).get("meters", {})
+            approaches = asteroid.get("close_approach_data") or [{}]
+            approach = next(
+                (
+                    item
+                    for item in approaches
+                    if item.get("close_approach_date") == approach_date
+                ),
+                approaches[0],
+            )
+            events.append(
+                AsteroidEvent(
+                    id=str(asteroid.get("id") or asteroid.get("neo_reference_id") or "unknown"),
+                    name=str(asteroid.get("name") or "Unknown asteroid"),
+                    absolute_magnitude=asteroid.get("absolute_magnitude_h"),
+                    estimated_diameter_min_meters=diameter.get("estimated_diameter_min"),
+                    estimated_diameter_max_meters=diameter.get("estimated_diameter_max"),
+                    potentially_hazardous=bool(
+                        asteroid.get("is_potentially_hazardous_asteroid", False)
+                    ),
+                    close_approach_date=approach.get("close_approach_date") or approach_date,
+                    relative_velocity_kph=(
+                        approach.get("relative_velocity", {}).get("kilometers_per_hour")
+                    ),
+                    miss_distance_kilometers=(
+                        approach.get("miss_distance", {}).get("kilometers")
+                    ),
+                    orbiting_body=approach.get("orbiting_body"),
+                    source_url=asteroid.get("nasa_jpl_url"),
+                )
+            )
+    return sorted(
+        events,
+        key=lambda event: (
+            event.close_approach_date,
+            event.miss_distance_kilometers
+            if event.miss_distance_kilometers is not None
+            else float("inf"),
+        ),
+    )
+
+
 async def fetch_donki_flares(start_date: date, end_date: date) -> list[dict[str, Any]]:
     params = {
         "startDate": start_date.isoformat(),
@@ -234,6 +333,36 @@ async def fetch_donki_flares(start_date: date, end_date: date) -> list[dict[str,
     return payload
 
 
+async def fetch_neows_asteroids(
+    start_date: date,
+    end_date: date,
+) -> dict[str, list[dict[str, Any]]]:
+    params = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "api_key": nasa_api_key(),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            response = await client.get(
+                "https://api.nasa.gov/neo/rest/v1/feed",
+                params=params,
+            )
+            response.raise_for_status()
+            payload = response.json()
+    except httpx.TimeoutException as error:
+        raise HTTPException(status_code=503, detail="NASA NeoWs took too long to respond.") from error
+    except (httpx.HTTPError, ValueError) as error:
+        raise HTTPException(status_code=502, detail="Could not retrieve valid data from NASA NeoWs.") from error
+
+    near_earth_objects = payload.get("near_earth_objects") if isinstance(payload, dict) else None
+    if not isinstance(near_earth_objects, dict) or not all(
+        isinstance(events, list) for events in near_earth_objects.values()
+    ):
+        raise HTTPException(status_code=502, detail="NASA NeoWs returned an unexpected format.")
+    return near_earth_objects
+
+
 async def get_space_weather_result(days: int) -> SolarFlareResponse:
     end_date = datetime.now(timezone.utc).date()
     start_date = end_date - timedelta(days=days - 1)
@@ -253,6 +382,42 @@ async def get_space_weather_result(days: int) -> SolarFlareResponse:
         observed_events_only=True,
         event_count=len(events),
         strongest_class=strongest.class_type if strongest else None,
+        summary=summary,
+        events=events,
+        fetched_at=datetime.now(timezone.utc),
+    )
+
+
+async def get_asteroid_result(days: int) -> AsteroidResponse:
+    start_date = datetime.now(timezone.utc).date()
+    end_date = start_date + timedelta(days=days - 1)
+    events = compact_asteroids(await fetch_neows_asteroids(start_date, end_date))
+    hazardous_count = sum(event.potentially_hazardous for event in events)
+    closest = min(
+        events,
+        key=lambda event: (
+            event.miss_distance_kilometers
+            if event.miss_distance_kilometers is not None
+            else float("inf")
+        ),
+        default=None,
+    )
+
+    summary = (
+        f"NASA NeoWs listed {len(events)} near-Earth asteroid approach(es) between "
+        f"{start_date.isoformat()} and {end_date.isoformat()}; "
+        f"{hazardous_count} are classified as potentially hazardous."
+        if events
+        else "NASA NeoWs listed no near-Earth asteroid approaches in the queried interval."
+    )
+    return AsteroidResponse(
+        source="NASA NeoWs",
+        query_start=start_date,
+        query_end=end_date,
+        upcoming_events_only=True,
+        event_count=len(events),
+        hazardous_count=hazardous_count,
+        closest_asteroid=closest.name if closest else None,
         summary=summary,
         events=events,
         fetched_at=datetime.now(timezone.utc),
@@ -304,7 +469,7 @@ async def watsonx_chat(model, messages: list[dict[str, Any]]) -> dict[str, Any]:
         return await asyncio.to_thread(
             model.chat,
             messages=messages,
-            tools=[SPACE_WEATHER_TOOL],
+            tools=[SPACE_WEATHER_TOOL, NEAR_EARTH_OBJECTS_TOOL],
             tool_choice_option="auto",
         )
     except Exception as error:
@@ -332,7 +497,12 @@ async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[
 
     tool_call = tool_calls[0]
     function = tool_call.get("function") or {}
-    if function.get("name") != "get_space_weather":
+    tool_name = function.get("name")
+    maximum_days_by_tool = {
+        "get_space_weather": 30,
+        "get_near_earth_objects": 7,
+    }
+    if tool_name not in maximum_days_by_tool:
         raise HTTPException(status_code=502, detail="watsonx requested a disallowed tool.")
 
     try:
@@ -343,16 +513,20 @@ async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[
         if isinstance(arguments, str):
             arguments = json.loads(arguments)
         days = int(float(arguments["days"]))
-        if not 1 <= days <= 30:
+        if not 1 <= days <= maximum_days_by_tool[tool_name]:
             raise ValueError
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         logger.error(
-            "Invalid tool_call arguments for get_space_weather: %r",
+            "Invalid tool_call arguments for %s: %r",
+            tool_name,
             function.get("arguments"),
         )
         raise HTTPException(status_code=502, detail="watsonx generated invalid tool arguments.") from error
 
-    tool_result_model = await get_space_weather_result(days)
+    if tool_name == "get_space_weather":
+        tool_result_model = await get_space_weather_result(days)
+    else:
+        tool_result_model = await get_asteroid_result(days)
     tool_result = tool_result_model.model_dump(mode="json")
     messages.extend(
         [
@@ -360,7 +534,7 @@ async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[
             {
                 "role": "tool",
                 "tool_call_id": tool_call.get("id"),
-                "name": "get_space_weather",
+                "name": tool_name,
                 "content": json.dumps(tool_result, ensure_ascii=False),
             },
         ]
@@ -370,7 +544,7 @@ async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[
         answer = final_response["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as error:
         raise HTTPException(status_code=502, detail="watsonx did not generate a valid final response.") from error
-    return (answer, "get_space_weather", tool_result)
+    return (answer, tool_name, tool_result)
 
 
 app = FastAPI(
@@ -436,6 +610,14 @@ async def recent_solar_flares(
 ) -> SolarFlareResponse:
     """Return a token-conscious view of observed DONKI solar flares."""
     return await get_space_weather_result(days)
+
+
+@app.get("/api/near-earth-objects/asteroids", response_model=AsteroidResponse)
+async def upcoming_asteroids(
+    days: int = Query(default=3, ge=1, le=7),
+) -> AsteroidResponse:
+    """Return a token-conscious view of upcoming asteroid approaches from NeoWs."""
+    return await get_asteroid_result(days)
 
 
 # Keep this last: API routes must be evaluated before the catch-all static mount.
