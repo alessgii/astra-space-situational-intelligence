@@ -208,18 +208,6 @@ document.addEventListener("DOMContentLoaded", () => {
             risk = classifyFlareRisk(toolResult.strongest_class);
         }
 
-        // Richer view when the near-Earth-object tool ran (get_near_earth_objects -> NASA NeoWs)
-        if (payload.tool_used === "get_near_earth_objects" && toolResult) {
-            data = [
-                { label: "Period queried", value: `${toolResult.query_start} → ${toolResult.query_end}` },
-                { label: "Asteroid approaches", value: String(toolResult.event_count) },
-                { label: "Potentially hazardous", value: String(toolResult.hazardous_count) },
-                { label: "Closest asteroid", value: toolResult.closest_asteroid || "None detected" },
-                { label: "Source", value: toolResult.source }
-            ];
-            sources = ["IBM watsonx", toolResult.source];
-        }
-
         return {
             title,
             answer: payload.answer,
