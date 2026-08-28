@@ -1,27 +1,27 @@
 # ASTRA 🚀 | Space Situational Intelligence
 
-ASTRA es un asistente web inteligente diseñado para consultar el clima espacial y el monitoreo de objetos astronómicos cercanos en tiempo real. Utiliza un agente con soporte de **Function / Tool Calling** a través de **IBM watsonx.ai** para interpretar el lenguaje natural, solicitar parámetros estructurados al backend, consultar APIs públicas astronómicas (como NASA DONKI o NeoWs) y responder al usuario con información precisa y contextualizada.
+ASTRA is an intelligent web assistant designed to query space weather and monitor nearby astronomical objects in real time. It uses an agent with **Function / Tool Calling** support via **IBM watsonx.ai** to interpret natural language, request structured parameters from the backend, query public astronomical APIs (such as NASA DONKI or NeoWs), and respond to the user with accurate, contextualised information.
 
 ---
 
-## 🌌 Características
+## 🌌 Features
 
-* **Monitoreo de Clima Espacial:** Detección y análisis de llamaradas solares (solar flares), eyecciones de masa coronal (CME) y posibles impactos en telecomunicaciones o redes eléctricas.
-* **Objetos Cercanos a la Tierra (NEOs):** Consulta de asteroides potencialmente peligrosos, fechas de aproximación cercana, velocidad y tamaño estimado.
-* **Eventos y Cuerpos Celestes:** Registro de cometas visibles y meteoros próximos.
-* **Arquitectura de Agente con Tool Calling:** El modelo de IBM watsonx decide dinámicamente cuándo y qué herramienta ejecutar en el servidor FastAPI mediante llamadas asíncronas con `httpx`.
+* **Space Weather Monitoring:** Detection and analysis of solar flares, coronal mass ejections (CMEs), and potential impacts on telecommunications or power grids.
+* **Near-Earth Objects (NEOs):** Query of potentially hazardous asteroids, close-approach dates, estimated velocity, and size.
+* **Events and Celestial Bodies:** Tracking of visible comets and upcoming meteors.
+* **Agent Architecture with Tool Calling:** The IBM watsonx model dynamically decides when and which tool to invoke on the FastAPI server via asynchronous calls using `httpx`.
 
 ---
 
-## 🛠️ Stack Tecnológico
+## 🛠️ Technology Stack
 
 * **Backend:** FastAPI, Uvicorn, Pydantic, HTTPX.
-* **IA / Orquestación:** `ibm-watsonx-ai` (soporte de llamadas a funciones/tools).
-* **Frontend:** HTML5, TailwindsCSS, JavaScript.
+* **AI / Orchestration:** `ibm-watsonx-ai` (function/tool calling support).
+* **Frontend:** HTML5, Tailwind CSS, JavaScript.
 
 ---
 
-## 📁 Estructura del Proyecto
+## 📁 Project Structure
 
 ```text
 ASTRA/
@@ -34,3 +34,4 @@ ASTRA/
 ├── astra_server.py
 ├── README.md
 └── requirements.txt
+```
