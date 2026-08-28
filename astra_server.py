@@ -31,6 +31,10 @@ load_dotenv(BASE_DIR / ".env")
 
 logging.basicConfig(level=logging.INFO)
 
+# 12s was too tight for these upstream NASA/JPL services on a slow day (especially
+# with the shared DEMO_KEY); give the connection more room before giving up.
+NASA_HTTP_TIMEOUT = httpx.Timeout(20.0, connect=8.0)
+
 
 class SpaceDomain(str, Enum):
     SPACE_WEATHER = "space_weather"
@@ -97,6 +101,28 @@ class SolarFlareResponse(BaseModel):
     fetched_at: datetime
 
 
+class CometApproachEvent(BaseModel):
+    designation: str
+    close_approach: Optional[datetime] = None
+    distance_au: Optional[float] = None
+    distance_min_au: Optional[float] = None
+    velocity_rel_kms: Optional[float] = None
+    absolute_magnitude_h: Optional[float] = None
+    source_url: Optional[str] = None
+
+
+class CometApproachResponse(BaseModel):
+    source: str
+    query_start: date
+    query_end: date
+    max_distance_au: float
+    event_count: int
+    closest_distance_au: Optional[float] = None
+    summary: str
+    events: list[CometApproachEvent]
+    fetched_at: datetime
+
+
 DOMAIN_KEYWORDS = {
     SpaceDomain.SPACE_WEATHER: {
         "solar", "sol", "llamarada", "llamaradas", "tormenta solar",
@@ -143,6 +169,35 @@ SPACE_WEATHER_TOOL = {
     },
 }
 
+COMET_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_visible_comets",
+        "description": (
+            "Queries UPCOMING close approaches of comets to Earth from NASA/JPL's "
+            "Small-Body Database (SBDB) Close-Approach Data API. Distance to Earth is "
+            "the best proxy for potential observability available here; it is NOT a "
+            "guarantee of naked-eye or binocular visibility, which also depends on the "
+            "comet's actual brightness at the time."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 30,
+                    "description": "Number of upcoming days to query for comet close approaches.",
+                }
+            },
+            "required": ["days"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+TOOLS = [SPACE_WEATHER_TOOL, COMET_TOOL]
+
 AGENT_SYSTEM_PROMPT = """"You are ASTRA, a space situational intelligence assistant. 
 Respond in the user's language. Use get_space_weather when you need observed solar flares. 
 This tool ONLY queries the past (days that have already passed), never the future.
@@ -150,7 +205,14 @@ This tool ONLY queries the past (days that have already passed), never the futur
  (or the number of days elapsed from the start of that week until today) and always use an integer between 1 and 30. 
  Never leave days empty, as non-numeric text, or outside that range. Do not present historical observations as forecasts.
   If they ask about the future, explain that DONKI does not predict flares and limit your conclusions to the available data.
-   Be brief, state dates, flare class, and potential limitations."
+   Be brief, state dates, flare class, and potential limitations.
+Use get_visible_comets when the user asks about comets they could observe or that are approaching Earth.
+This tool ONLY queries UPCOMING close approaches (from today forward), never the past.
+If the user asks about 'this week', 'the next few days', or a similar range, interpret that as days=7
+and always use an integer between 1 and 30. Never leave days empty, as non-numeric text, or outside that range.
+Distance to Earth is only a rough proxy for observability: a close comet is not necessarily bright enough
+to see with the naked eye or binoculars. Be brief, state the comet's designation, close-approach date, and
+distance, and note that estimated brightness is not part of this data source."
 """
 
 def detect_intent(message: str) -> Intent:
@@ -220,7 +282,7 @@ async def fetch_donki_flares(start_date: date, end_date: date) -> list[dict[str,
         "api_key": nasa_api_key(),
     }
     try:
-        async with httpx.AsyncClient(timeout=12.0) as client:
+        async with httpx.AsyncClient(timeout=NASA_HTTP_TIMEOUT) as client:
             response = await client.get("https://api.nasa.gov/DONKI/FLR", params=params)
             response.raise_for_status()
             payload = response.json()
@@ -253,6 +315,110 @@ async def get_space_weather_result(days: int) -> SolarFlareResponse:
         observed_events_only=True,
         event_count=len(events),
         strongest_class=strongest.class_type if strongest else None,
+        summary=summary,
+        events=events,
+        fetched_at=datetime.now(timezone.utc),
+    )
+
+
+async def fetch_jpl_comet_approaches(
+    start_date: date, end_date: date, dist_max_au: float
+) -> dict[str, Any]:
+    params = {
+        "date-min": start_date.isoformat(),
+        "date-max": end_date.isoformat(),
+        "dist-max": str(dist_max_au),
+        "kind": "c",
+        "sort": "date",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=NASA_HTTP_TIMEOUT) as client:
+            response = await client.get("https://ssd-api.jpl.nasa.gov/cad.api", params=params)
+            response.raise_for_status()
+            payload = response.json()
+    except httpx.TimeoutException as error:
+        raise HTTPException(status_code=503, detail="NASA/JPL SBDB took too long to respond.") from error
+    except (httpx.HTTPError, ValueError) as error:
+        raise HTTPException(status_code=502, detail="Could not retrieve valid data from NASA/JPL SBDB.") from error
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=502, detail="NASA/JPL SBDB returned an unexpected format.")
+    return payload
+
+
+def compact_comet_approaches(payload: dict[str, Any]) -> list[CometApproachEvent]:
+    # A too-restrictive query returns a zero-count payload with no "fields"/"data"
+    # keys at all (e.g. {"signature": {...}, "count": 0}) — that's a valid empty
+    # result, not a malformed response, so we treat it as "no comets found".
+    fields: list[str] = payload.get("fields") or []
+    rows: list[list[str]] = payload.get("data") or []
+    if not fields or not rows:
+        return []
+
+    index = {name: position for position, name in enumerate(fields)}
+
+    def _float(row: list[str], key: str) -> Optional[float]:
+        value = row[index[key]] if key in index else None
+        try:
+            return float(value) if value not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
+    def _parsed_date(row: list[str]) -> Optional[datetime]:
+        raw = row[index["cd"]] if "cd" in index else None
+        if not raw:
+            return None
+        try:
+            return datetime.strptime(raw, "%Y-%b-%d %H:%M").replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+    events = [
+        CometApproachEvent(
+            designation=str(row[index["des"]]) if "des" in index else "unknown",
+            close_approach=_parsed_date(row),
+            distance_au=_float(row, "dist"),
+            distance_min_au=_float(row, "dist_min"),
+            velocity_rel_kms=_float(row, "v_rel"),
+            absolute_magnitude_h=_float(row, "h"),
+            source_url=(
+                f"https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr={row[index['des']]}"
+                if "des" in index
+                else None
+            ),
+        )
+        for row in rows
+    ]
+    return sorted(
+        events,
+        key=lambda event: event.close_approach or datetime.max.replace(tzinfo=timezone.utc),
+    )
+
+
+async def get_visible_comets_result(days: int, max_distance_au: float = 0.5) -> CometApproachResponse:
+    start_date = datetime.now(timezone.utc).date()
+    end_date = start_date + timedelta(days=days - 1)
+    payload = await fetch_jpl_comet_approaches(start_date, end_date, max_distance_au)
+    events = compact_comet_approaches(payload)
+    closest = min(
+        events,
+        key=lambda event: event.distance_au if event.distance_au is not None else float("inf"),
+        default=None,
+    )
+
+    summary = (
+        f"NASA/JPL SBDB found {len(events)} comet close approach(es) within {max_distance_au} AU "
+        f"between {start_date.isoformat()} and {end_date.isoformat()}."
+        if events
+        else f"NASA/JPL SBDB found no comet close approaches within {max_distance_au} AU in the queried interval."
+    )
+    return CometApproachResponse(
+        source="NASA/JPL SBDB (CAD API)",
+        query_start=start_date,
+        query_end=end_date,
+        max_distance_au=max_distance_au,
+        event_count=len(events),
+        closest_distance_au=closest.distance_au if closest else None,
         summary=summary,
         events=events,
         fetched_at=datetime.now(timezone.utc),
@@ -299,19 +465,36 @@ def create_watsonx_model():
         ) from error
 
 
+WATSONX_TIMEOUT_SECONDS = 45.0
+
+
 async def watsonx_chat(model, messages: list[dict[str, Any]]) -> dict[str, Any]:
     try:
-        return await asyncio.to_thread(
-            model.chat,
-            messages=messages,
-            tools=[SPACE_WEATHER_TOOL],
-            tool_choice_option="auto",
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                model.chat,
+                messages=messages,
+                tools=TOOLS,
+                tool_choice_option="auto",
+            ),
+            timeout=WATSONX_TIMEOUT_SECONDS,
         )
+    except asyncio.TimeoutError as error:
+        raise HTTPException(
+            status_code=504,
+            detail="watsonx took too long to respond.",
+        ) from error
     except Exception as error:
         raise HTTPException(
             status_code=502,
             detail="watsonx could not process the request.",
         ) from error
+
+
+TOOL_RESULT_GETTERS = {
+    "get_space_weather": get_space_weather_result,
+    "get_visible_comets": get_visible_comets_result,
+}
 
 
 async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[dict[str, Any]]]:
@@ -332,7 +515,8 @@ async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[
 
     tool_call = tool_calls[0]
     function = tool_call.get("function") or {}
-    if function.get("name") != "get_space_weather":
+    tool_name = function.get("name")
+    if tool_name not in TOOL_RESULT_GETTERS:
         raise HTTPException(status_code=502, detail="watsonx requested a disallowed tool.")
 
     try:
@@ -347,12 +531,13 @@ async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[
             raise ValueError
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         logger.error(
-            "Invalid tool_call arguments for get_space_weather: %r",
+            "Invalid tool_call arguments for %s: %r",
+            tool_name,
             function.get("arguments"),
         )
         raise HTTPException(status_code=502, detail="watsonx generated invalid tool arguments.") from error
 
-    tool_result_model = await get_space_weather_result(days)
+    tool_result_model = await TOOL_RESULT_GETTERS[tool_name](days)
     tool_result = tool_result_model.model_dump(mode="json")
     messages.extend(
         [
@@ -360,7 +545,7 @@ async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[
             {
                 "role": "tool",
                 "tool_call_id": tool_call.get("id"),
-                "name": "get_space_weather",
+                "name": tool_name,
                 "content": json.dumps(tool_result, ensure_ascii=False),
             },
         ]
@@ -370,7 +555,7 @@ async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[
         answer = final_response["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as error:
         raise HTTPException(status_code=502, detail="watsonx did not generate a valid final response.") from error
-    return (answer, "get_space_weather", tool_result)
+    return (answer, tool_name, tool_result)
 
 
 app = FastAPI(
@@ -436,6 +621,15 @@ async def recent_solar_flares(
 ) -> SolarFlareResponse:
     """Return a token-conscious view of observed DONKI solar flares."""
     return await get_space_weather_result(days)
+
+
+@app.get("/api/comets/close-approaches", response_model=CometApproachResponse)
+async def upcoming_comet_approaches(
+    days: int = Query(default=14, ge=1, le=30),
+    max_distance_au: float = Query(default=0.5, gt=0, le=1.3),
+) -> CometApproachResponse:
+    """Return a token-conscious view of upcoming near-Earth comet approaches (NASA/JPL SBDB)."""
+    return await get_visible_comets_result(days, max_distance_au)
 
 
 # Keep this last: API routes must be evaluated before the catch-all static mount.
