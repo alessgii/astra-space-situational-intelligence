@@ -208,6 +208,17 @@ document.addEventListener("DOMContentLoaded", () => {
             risk = classifyFlareRisk(toolResult.strongest_class);
         }
 
+        // Richer view when the comet tool actually ran (get_visible_comets -> NASA/JPL SBDB CAD API)
+        if (payload.tool_used === "get_visible_comets" && toolResult) {
+            data = [
+                { label: "Period queried", value: `${toolResult.query_start} → ${toolResult.query_end}` },
+                { label: "Close approaches", value: String(toolResult.event_count) },
+                { label: "Closest distance", value: toolResult.closest_distance_au != null ? `${toolResult.closest_distance_au} AU` : "None detected" },
+                { label: "Source", value: toolResult.source }
+            ];
+            sources = ["IBM watsonx", toolResult.source];
+        }
+
         return {
             title,
             answer: payload.answer,
