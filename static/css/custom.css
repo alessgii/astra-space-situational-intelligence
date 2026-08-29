@@ -36,3 +36,26 @@
     33% { content: '..'; }
     66% { content: '...'; }
 }
+
+/* ── Sources Modal ─────────────────────────────────────── */
+
+#sourcesModal {
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+    visibility: hidden;
+}
+#sourcesModal.modal-open {
+    opacity: 1 !important;
+    visibility: visible;
+    pointer-events: auto !important;
+}
+#sourcesModal.modal-open #sourcesModalBackdrop {
+    pointer-events: auto;
+}
+
+.modal-panel-scale {
+    transform: scale(0.95) translateY(8px);
+    transition: transform 0.25s cubic-bezier(0.34, 1.26, 0.64, 1);
+}
+#sourcesModal.modal-open .modal-panel-scale {
+    transform: scale(1) translateY(0);
+}

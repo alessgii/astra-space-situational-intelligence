@@ -1,0 +1,23 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ASTRA logo">
+                        <defs>
+                            <linearGradient id="astra-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#38bdf8"/>
+                                <stop offset="100%" stop-color="#c084fc"/>
+                            </linearGradient>
+                            <filter id="astra-glow" x="-40%" y="-40%" width="180%" height="180%">
+                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                            </filter>
+                        </defs>
+                        <!-- Star-A: outer star points radiating from the apex of the A -->
+                        <!-- Top spike -->
+                        <polygon points="16,1 17.1,5.6 21,3.5 18.2,7.2 23,8 18.2,8.8 21,12.5 17.1,10.4 16,15 14.9,10.4 11,12.5 13.8,8.8 9,8 13.8,7.2 11,3.5 14.9,5.6" fill="url(#astra-grad)" filter="url(#astra-glow)" opacity="0.95"/>
+                        <!-- A legs -->
+                        <path d="M5 29 L16 7 L27 29" stroke="url(#astra-grad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#astra-glow)"/>
+                        <!-- A crossbar -->
+                        <line x1="9.8" y1="21" x2="22.2" y2="21" stroke="url(#astra-grad)" stroke-width="2.4" stroke-linecap="round" filter="url(#astra-glow)"/>
+                        <!-- Tiny star sparkle top-right -->
+                        <circle cx="26" cy="6" r="1.2" fill="#38bdf8" opacity="0.8"/>
+                        <line x1="26" y1="3.5" x2="26" y2="8.5" stroke="#38bdf8" stroke-width="0.8" opacity="0.6"/>
+                        <line x1="23.5" y1="6" x2="28.5" y2="6" stroke="#38bdf8" stroke-width="0.8" opacity="0.6"/>
+                    </svg>

@@ -17,7 +17,7 @@ import logging
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, validator
 from dotenv import load_dotenv
@@ -199,13 +199,14 @@ COMET_TOOL = {
 TOOLS = [SPACE_WEATHER_TOOL, COMET_TOOL]
 
 AGENT_SYSTEM_PROMPT = """"You are ASTRA, a space situational intelligence assistant. 
-Respond in the user's language. Use get_space_weather when you need observed solar flares. 
+Respond in the user's language. 
+Use get_space_weather when you need observed solar flares. 
 This tool ONLY queries the past (days that have already passed), never the future.
- If the user asks about 'this week', 'the past few days', or a similar range, interpret that as days=7 
- (or the number of days elapsed from the start of that week until today) and always use an integer between 1 and 30. 
- Never leave days empty, as non-numeric text, or outside that range. Do not present historical observations as forecasts.
-  If they ask about the future, explain that DONKI does not predict flares and limit your conclusions to the available data.
-   Be brief, state dates, flare class, and potential limitations.
+If the user asks about 'this week', 'the past few days', or a similar range, interpret that as days=7 
+(or the number of days elapsed from the start of that week until today) and always use an integer between 1 and 30. 
+Never leave days empty, as non-numeric text, or outside that range. Do not present historical observations as forecasts.
+If they ask about the future, explain that DONKI does not predict flares and limit your conclusions to the available data.
+Be brief, state dates, flare class, and potential limitations.
 Use get_visible_comets when the user asks about comets they could observe or that are approaching Earth.
 This tool ONLY queries UPCOMING close approaches (from today forward), never the past.
 If the user asks about 'this week', 'the next few days', or a similar range, interpret that as days=7
@@ -631,6 +632,9 @@ async def upcoming_comet_approaches(
     """Return a token-conscious view of upcoming near-Earth comet approaches (NASA/JPL SBDB)."""
     return await get_visible_comets_result(days, max_distance_au)
 
-
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse("static/favicon.svg", media_type="image/svg+xml")
+    
 # Keep this last: API routes must be evaluated before the catch-all static mount.
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

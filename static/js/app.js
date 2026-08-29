@@ -1,4 +1,34 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // --- SOURCES MODAL ---
+    const sourcesModal = document.getElementById('sourcesModal');
+    const closeModalBtn = document.getElementById('closeSourcesModal');
+    const modalBackdrop = document.getElementById('sourcesModalBackdrop');
+
+    function openSourcesModal() {
+        sourcesModal.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeSourcesModal() {
+        sourcesModal.classList.remove('modal-open');
+        document.body.style.overflow = '';
+    }
+
+    document.getElementById('openSourcesModal').addEventListener('click', (e) => {
+        e.preventDefault();
+        openSourcesModal();
+    });
+
+    document.getElementById('openSourcesModalFooter').addEventListener('click', openSourcesModal);
+    closeModalBtn.addEventListener('click', closeSourcesModal);
+    modalBackdrop.addEventListener('click', closeSourcesModal);
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sourcesModal.classList.contains('modal-open')) {
+            closeSourcesModal();
+        }
+    });
+
     // --- DOM ELEMENTS ---
     const queryInput = document.getElementById('query-input');
     const btnSubmit = document.getElementById('btn-submit');

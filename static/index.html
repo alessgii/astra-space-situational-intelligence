@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASTRA - Space Situational Intelligence</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     
     <!-- Tailwind CSS (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -35,15 +36,29 @@
         <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-2">
-                    <!-- Logo  -->
-                    <svg class="w-6 h-6 text-cosmic-400" fill="none" stroke="url(#cosmic-gradient)" viewBox="0 0 24 24">
+                    <!-- Logo -->
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ASTRA logo">
                         <defs>
-                            <linearGradient id="cosmic-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#38bdf8" />
-                                <stop offset="100%" stop-color="#c084fc" />
+                            <linearGradient id="astra-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#38bdf8"/>
+                                <stop offset="100%" stop-color="#c084fc"/>
                             </linearGradient>
+                            <filter id="astra-glow" x="-40%" y="-40%" width="180%" height="180%">
+                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                            </filter>
                         </defs>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                        <!-- Star-A: outer star points radiating from the apex of the A -->
+                        <!-- Top spike -->
+                        <polygon points="16,1 17.1,5.6 21,3.5 18.2,7.2 23,8 18.2,8.8 21,12.5 17.1,10.4 16,15 14.9,10.4 11,12.5 13.8,8.8 9,8 13.8,7.2 11,3.5 14.9,5.6" fill="url(#astra-grad)" filter="url(#astra-glow)" opacity="0.95"/>
+                        <!-- A legs -->
+                        <path d="M5 29 L16 7 L27 29" stroke="url(#astra-grad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#astra-glow)"/>
+                        <!-- A crossbar -->
+                        <line x1="9.8" y1="21" x2="22.2" y2="21" stroke="url(#astra-grad)" stroke-width="2.4" stroke-linecap="round" filter="url(#astra-glow)"/>
+                        <!-- Tiny star sparkle top-right -->
+                        <circle cx="26" cy="6" r="1.2" fill="#38bdf8" opacity="0.8"/>
+                        <line x1="26" y1="3.5" x2="26" y2="8.5" stroke="#38bdf8" stroke-width="0.8" opacity="0.6"/>
+                        <line x1="23.5" y1="6" x2="28.5" y2="6" stroke="#38bdf8" stroke-width="0.8" opacity="0.6"/>
                     </svg>
                     <h1 class="text-xl font-semibold text-white tracking-wide">ASTRA<span class="text-cosmic-400 font-light"> - SSI</span></h1>
                 </div>
@@ -51,12 +66,15 @@
                 <span class="px-2 py-0.5 rounded text-[10px] font-mono tracking-widest font-semibold uppercase bg-cosmic-900/50 text-cosmic-300 border border-cosmic-500/30 shadow-[0_0_10px_rgba(168,85,247,0.2)]">
                     IBM Bob
                 </span>
+                <!-- IBM watsonx Span -->
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono tracking-widest font-semibold uppercase bg-astra-500/10 text-astra-400 border border-astra-500/30 shadow-[0_0_10px_rgba(14,165,233,0.2)]">
+                    IBM watsonx
+                </span>
             </div>
             
             <div class="flex items-center gap-6 text-sm text-slate-400">
                 <nav class="hidden md:flex gap-4">
-                    <a href="#" class="hover:text-white transition-colors">Home</a>
-                    <a href="#" class="hover:text-white transition-colors">Sources</a>
+                    <p id="openSourcesModal" class="hover:text-white transition-colors cursor-pointer">Sources</p>
                 </nav>
                 <!-- System Status -->
                 <div class="flex items-center gap-2 px-3 py-1 bg-space-800 rounded-full border border-space-700/80 shadow-[0_0_10px_rgba(147,51,234,0.1)]">
@@ -142,7 +160,6 @@
                 <!-- Injected via JS -->
             </div>
         </section>
-
         <!-- DYNAMIC AREA: Results -->
         <section id="results-state" class="hidden flex-col gap-8 max-w-4xl mx-auto w-full relative">
             
@@ -192,12 +209,176 @@
     </main>
 
     <!-- FOOTER -->
-    <footer class="border-t border-space-800/80 mt-auto bg-space-950/80 backdrop-blur">
-        <div class="max-w-5xl mx-auto px-4 py-6 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500">
-            <p>ASTRA - AI IBM August challenge</p>
-            <p>Designed for space monitoring via natural language.</p>
+    <footer class="border-t border-space-800/80 mt-40" style="background: rgba(7,5,15,0.90); backdrop-filter: blur(16px);">
+        <div class="max-w-5xl mx-auto px-4 pt-10 pb-6">
+            <!-- 3-column grid -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 pb-8 border-b border-space-800/60">
+
+                <!-- Col 1: Brand & Mission -->
+                <div class="flex flex-col gap-3">
+                    <div class="flex items-center gap-2">
+                        <svg width="22" height="22" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="footer-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#38bdf8"/>
+                                    <stop offset="100%" stop-color="#c084fc"/>
+                                </linearGradient>
+                            </defs>
+                            <polygon points="16,1 17.1,5.6 21,3.5 18.2,7.2 23,8 18.2,8.8 21,12.5 17.1,10.4 16,15 14.9,10.4 11,12.5 13.8,8.8 9,8 13.8,7.2 11,3.5 14.9,5.6" fill="url(#footer-grad)" opacity="0.95"/>
+                            <path d="M5 29 L16 7 L27 29" stroke="url(#footer-grad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                            <line x1="9.8" y1="21" x2="22.2" y2="21" stroke="url(#footer-grad)" stroke-width="2.4" stroke-linecap="round"/>
+                        </svg>
+                        <span class="text-white font-semibold tracking-wide text-sm">ASTRA</span>
+                    </div>
+                    <p class="text-xs text-slate-500 leading-relaxed">
+                        Space Situational Intelligence Platform powered by <span class="text-astra-400">IBM watsonx.ai</span> and <span class="text-cosmic-400">NASA Open APIs</span>.
+                    </p>
+                </div>
+
+                <!-- Col 2: Data Providers -->
+                <div class="flex flex-col gap-3">
+                    <h4 class="text-xs font-mono uppercase tracking-widest text-slate-400">Data Providers</h4>
+                    <ul class="flex flex-col gap-2 text-xs text-slate-500">
+                        <li>
+                            <a href="https://api.nasa.gov/" target="_blank" rel="noopener" class="flex items-center gap-2 hover:text-astra-400 transition-colors group">
+                                <span class="w-1.5 h-1.5 rounded-full bg-astra-400 group-hover:shadow-[0_0_6px_#38bdf8] transition-shadow"></span>
+                                NASA Open APIs
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://ssd-api.jpl.nasa.gov/" target="_blank" rel="noopener" class="flex items-center gap-2 hover:text-astra-400 transition-colors group">
+                                <span class="w-1.5 h-1.5 rounded-full bg-astra-400 group-hover:shadow-[0_0_6px_#38bdf8] transition-shadow"></span>
+                                NASA JPL SSD / CNEOS
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://www.ibm.com/watsonx" target="_blank" rel="noopener" class="flex items-center gap-2 hover:text-cosmic-400 transition-colors group">
+                                <span class="w-1.5 h-1.5 rounded-full bg-cosmic-400 group-hover:shadow-[0_0_6px_#c084fc] transition-shadow"></span>
+                                IBM watsonx.ai
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Col 3: System & Links -->
+                <div class="flex flex-col gap-3">
+                    <h4 class="text-xs font-mono uppercase tracking-widest text-slate-400">System</h4>
+                    <ul class="flex flex-col gap-2 text-xs text-slate-500">
+                        <li>
+                            <button id="openSourcesModalFooter" class="flex items-center gap-2 hover:text-white transition-colors group cursor-pointer">
+                                <span class="w-1.5 h-1.5 rounded-full bg-cosmic-500 group-hover:shadow-[0_0_6px_#a855f7] transition-shadow"></span>
+                                Sources &amp; Architecture
+                            </button>
+                        </li>
+                        <li>
+                            <a href="https://github.com/alessgii/astra-space-situational-intelligence" target="_blank" rel="noopener" class="flex items-center gap-2 hover:text-white transition-colors group">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-500 group-hover:shadow-[0_0_6px_#94a3b8] transition-shadow"></span>
+                                GitHub Repository
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+            </div>
+
+            <!-- Bottom bar -->
+            <div class="pt-4 flex flex-col md:flex-row justify-between items-center gap-3 text-[11px] text-slate-600 font-mono">
+                <span>© 2026 ASTRA · Developed for the IBM AI Challenge</span>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]"></span>
+                    <span class="text-emerald-400/70 tracking-wide">Live Space Telemetry</span>
+                </div>
+            </div>
         </div>
     </footer>
+
+    <!-- SOURCES MODAL -->
+    <div id="sourcesModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none opacity-0" aria-modal="true" role="dialog" aria-labelledby="modal-title">
+        <!-- Backdrop -->
+        <div id="sourcesModalBackdrop" class="absolute inset-0 bg-black/70 backdrop-blur-sm pointer-events-none"></div>
+        <!-- Panel -->
+        <div id="sourcesModalPanel" class="relative z-10 w-full max-w-2xl rounded-2xl border border-white/8 shadow-[0_20px_60px_rgba(0,0,0,0.7)] overflow-hidden modal-panel-scale" style="background: rgba(13,10,28,0.92); backdrop-filter: blur(20px); border-color: rgba(255,255,255,0.08);">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b" style="border-color: rgba(255,255,255,0.07);">
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-cosmic-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                    <h2 id="modal-title" class="text-white font-semibold tracking-wide">Sources &amp; Architecture</h2>
+                </div>
+                <button id="closeSourcesModal" class="text-slate-500 hover:text-white transition-colors rounded-lg p-1 hover:bg-space-700" aria-label="Close modal">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <!-- Body -->
+            <div class="px-6 py-6 flex flex-col gap-4 max-h-[70vh] overflow-y-auto">
+                <p class="text-sm text-slate-400 leading-relaxed">ASTRA orchestrates multiple NASA scientific APIs and IBM watsonx.ai to deliver real-time space situational intelligence through natural language.</p>
+
+                <!-- API Cards -->
+                <div class="flex flex-col gap-3">
+
+                    <!-- NASA DONKI -->
+                    <div class="rounded-xl p-4 border flex gap-4 items-start" style="background: rgba(56,189,248,0.05); border-color: rgba(56,189,248,0.15);">
+                        <div class="mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(56,189,248,0.12);">
+                            <svg class="w-4 h-4" fill="none" stroke="#38bdf8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-9H20M4 12H3m15.07-6.07l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/></svg>
+                        </div>
+                        <div class="flex flex-col gap-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-white text-sm font-medium">NASA DONKI</span>
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded" style="background: rgba(56,189,248,0.1); color: #38bdf8; border: 1px solid rgba(56,189,248,0.2);">SWRC</span>
+                            </div>
+                            <code class="text-[11px] text-slate-500 font-mono break-all">api.nasa.gov/DONKI/FLR</code>
+                            <p class="text-xs text-slate-400 mt-0.5">Space Weather Research Center database. Provides solar flare classifications (A–X), geomagnetic storm events, and real-time space weather alerts.</p>
+                        </div>
+                    </div>
+
+                    <!-- NASA NeoWs -->
+                    <div class="rounded-xl p-4 border flex gap-4 items-start" style="background: rgba(168,85,247,0.05); border-color: rgba(168,85,247,0.15);">
+                        <div class="mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(168,85,247,0.12);">
+                            <svg class="w-4 h-4" fill="none" stroke="#a855f7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                        </div>
+                        <div class="flex flex-col gap-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-white text-sm font-medium">NASA NeoWs</span>
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded" style="background: rgba(168,85,247,0.1); color: #a855f7; border: 1px solid rgba(168,85,247,0.2);">CNEOS</span>
+                            </div>
+                            <code class="text-[11px] text-slate-500 font-mono break-all">api.nasa.gov/neo/rest/v1/feed</code>
+                            <p class="text-xs text-slate-400 mt-0.5">Near Earth Object Web Service. Tracks near-Earth asteroid close approaches, miss distances, and potential hazard classifications.</p>
+                        </div>
+                    </div>
+
+                    <!-- NASA/JPL SBDB -->
+                    <div class="rounded-xl p-4 border flex gap-4 items-start" style="background: rgba(34,211,238,0.05); border-color: rgba(34,211,238,0.15);">
+                        <div class="mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(34,211,238,0.12);">
+                            <svg class="w-4 h-4" fill="none" stroke="#22d3ee" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"/></svg>
+                        </div>
+                        <div class="flex flex-col gap-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-white text-sm font-medium">NASA / JPL SBDB</span>
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded" style="background: rgba(34,211,238,0.1); color: #22d3ee; border: 1px solid rgba(34,211,238,0.2);">CAD API</span>
+                            </div>
+                            <code class="text-[11px] text-slate-500 font-mono break-all">ssd-api.jpl.nasa.gov/cad.api</code>
+                            <p class="text-xs text-slate-400 mt-0.5">JPL Small-Body Database close-approach data API. Covers comet and minor-planet proximity events, approach velocities, and orbital parameters.</p>
+                        </div>
+                    </div>
+
+                    <!-- IBM watsonx.ai -->
+                    <div class="rounded-xl p-4 border flex gap-4 items-start" style="background: rgba(192,132,252,0.05); border-color: rgba(192,132,252,0.15);">
+                        <div class="mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(192,132,252,0.12);">
+                            <svg class="w-4 h-4" fill="none" stroke="#c084fc" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                        </div>
+                        <div class="flex flex-col gap-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-white text-sm font-medium">IBM watsonx.ai</span>
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded" style="background: rgba(192,132,252,0.1); color: #c084fc; border: 1px solid rgba(192,132,252,0.2);">Granite</span>
+                            </div>
+                            <code class="text-[11px] text-slate-500 font-mono break-all">ibm.com/watsonx</code>
+                            <p class="text-xs text-slate-400 mt-0.5">IBM Granite foundation models handle natural language understanding, intent classification, LLM tool-calling orchestration, and synthesis of final answers from scientific data.</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Scripts -->
     <script src="js/app.js"></script>
