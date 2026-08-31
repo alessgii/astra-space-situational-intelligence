@@ -303,7 +303,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // 1. Agent Response
         resultTitle.textContent = data.title;
-        resultAnswer.textContent = data.answer;
+        const rawHtml = marked.parse(data.answer || '');
+        resultAnswer.innerHTML = (typeof DOMPurify !== 'undefined')
+            ? DOMPurify.sanitize(rawHtml)
+            : rawHtml;
 
         // 2. Risk Badge
         if (data.risk) {

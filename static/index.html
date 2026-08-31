@@ -8,6 +8,10 @@
     
     <!-- Tailwind CSS (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -28,6 +32,104 @@
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/custom.css">
+
+    <style>
+        /* ── Markdown render target: dark-theme typography ── */
+        #result-answer h1,
+        #result-answer h2,
+        #result-answer h3,
+        #result-answer h4 {
+            color: #FFFFFF;
+            font-weight: 700;
+            margin-top: 1.25em;
+            margin-bottom: 0.4em;
+            line-height: 1.3;
+        }
+        #result-answer h1 { font-size: 1.35em; }
+        #result-answer h2 { font-size: 1.2em; }
+        #result-answer h3 { font-size: 1.05em; }
+        #result-answer h4 { font-size: 0.95em; }
+
+        #result-answer strong,
+        #result-answer b {
+            color: #F3F4F6;
+            font-weight: 600;
+        }
+
+        #result-answer p {
+            color: #D1D5DB;
+            line-height: 1.6;
+            margin-bottom: 0.75em;
+        }
+
+        #result-answer ul,
+        #result-answer ol {
+            color: #D1D5DB;
+            line-height: 1.6;
+            padding-left: 1.5em;
+            margin-bottom: 0.75em;
+        }
+        #result-answer ul { list-style-type: disc; }
+        #result-answer ol { list-style-type: decimal; }
+
+        #result-answer li {
+            margin-bottom: 0.3em;
+        }
+        #result-answer li::marker {
+            color: #6B7280;
+        }
+
+        #result-answer a {
+            color: #38BDF8;
+            text-decoration: none;
+        }
+        #result-answer a:hover {
+            color: #A855F7;
+            text-decoration: underline;
+        }
+
+        #result-answer code {
+            background: rgba(255,255,255,0.06);
+            color: #93C5FD;
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            font-size: 0.85em;
+            padding: 0.15em 0.4em;
+            border-radius: 4px;
+        }
+
+        #result-answer pre {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            padding: 1em;
+            overflow-x: auto;
+            margin-bottom: 0.75em;
+        }
+        #result-answer pre code {
+            background: transparent;
+            padding: 0;
+            font-size: 0.85em;
+        }
+
+        #result-answer blockquote {
+            border-left: 3px solid #A855F7;
+            padding-left: 1em;
+            color: #9CA3AF;
+            margin: 0.75em 0;
+            font-style: italic;
+        }
+
+        #result-answer hr {
+            border: none;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin: 1em 0;
+        }
+
+        /* Remove top margin from the very first child to avoid extra gap */
+        #result-answer > *:first-child { margin-top: 0; }
+        /* Remove bottom margin from the very last child */
+        #result-answer > *:last-child  { margin-bottom: 0; }
+    </style>
 </head>
 <body class="bg-space-950 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-space-900 via-space-950 to-cosmic-900/30 text-slate-300 font-sans antialiased min-h-screen flex flex-col selection:bg-cosmic-500 selection:text-white">
 
@@ -175,7 +277,7 @@
                 </div>
                 
                 <h4 id="result-title" class="text-xl md:text-2xl font-medium text-white mb-4"></h4>
-                <p id="result-answer" class="text-slate-300 leading-relaxed whitespace-pre-wrap"></p>
+                <div id="result-answer" class="text-slate-300 leading-relaxed"></div>
             </div>
 
             <!-- Scientific Data -->
