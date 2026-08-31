@@ -4,3 +4,4 @@ httpx
 pydantic
 python-dotenv
 aiofiles
+ibm-watsonx-ai

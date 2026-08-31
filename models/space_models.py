@@ -1,4 +1,4 @@
-"""Space data Pydantic models: solar flares and comet close approaches."""
+"""Space data Pydantic models: solar flares, comet close approaches, and near-Earth asteroids."""
 
 from datetime import date, datetime
 from typing import Optional
@@ -48,4 +48,34 @@ class CometApproachResponse(BaseModel):
     closest_distance_au: Optional[float] = None
     summary: str
     events: list[CometApproachEvent]
+    fetched_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Near-Earth Asteroids (NASA NeoWs)
+# ---------------------------------------------------------------------------
+
+class AsteroidCloseApproach(BaseModel):
+    id: str
+    name: str
+    close_approach_date: Optional[date] = None
+    miss_distance_km: Optional[float] = None
+    miss_distance_au: Optional[float] = None
+    relative_velocity_kms: Optional[float] = None
+    estimated_diameter_min_m: Optional[float] = None
+    estimated_diameter_max_m: Optional[float] = None
+    is_potentially_hazardous: bool = False
+    absolute_magnitude_h: Optional[float] = None
+    source_url: Optional[str] = None
+
+
+class AsteroidResponse(BaseModel):
+    source: str
+    query_start: date
+    query_end: date
+    event_count: int
+    hazardous_count: int
+    closest_miss_km: Optional[float] = None
+    summary: str
+    events: list[AsteroidCloseApproach]
     fetched_at: datetime

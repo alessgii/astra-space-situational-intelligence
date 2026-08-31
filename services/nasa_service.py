@@ -1,4 +1,4 @@
-"""NASA external API clients: DONKI solar-flare data and JPL SBDB comet approaches."""
+"""NASA external API clients: DONKI solar-flare data, JPL SBDB comet approaches, and NeoWs asteroids."""
 
 import os
 from datetime import date, datetime, timedelta, timezone
@@ -9,6 +9,8 @@ from fastapi import HTTPException
 
 from config import NASA_HTTP_TIMEOUT
 from models.space_models import (
+    AsteroidCloseApproach,
+    AsteroidResponse,
     CometApproachEvent,
     CometApproachResponse,
     SolarFlareEvent,
@@ -212,6 +214,136 @@ async def get_visible_comets_result(days: int, max_distance_au: float = 0.5) -> 
         max_distance_au=max_distance_au,
         event_count=len(events),
         closest_distance_au=closest.distance_au if closest else None,
+        summary=summary,
+        events=events,
+        fetched_at=datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# NASA NeoWs — near-Earth asteroid close approaches
+# ---------------------------------------------------------------------------
+
+async def fetch_neows_asteroids(start_date: date, end_date: date) -> dict[str, Any]:
+    """Fetch NeoWs feed for the given date range (max 7 days per API limit)."""
+    params = {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "api_key": nasa_api_key(),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=NASA_HTTP_TIMEOUT) as client:
+            response = await client.get(
+                "https://api.nasa.gov/neo/rest/v1/feed", params=params
+            )
+            response.raise_for_status()
+            payload = response.json()
+    except httpx.TimeoutException as error:
+        raise HTTPException(status_code=503, detail="NASA NeoWs took too long to respond.") from error
+    except (httpx.HTTPError, ValueError) as error:
+        raise HTTPException(status_code=502, detail="Could not retrieve valid data from NASA NeoWs.") from error
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=502, detail="NASA NeoWs returned an unexpected format.")
+    return payload
+
+
+def compact_asteroids(payload: dict[str, Any]) -> list[AsteroidCloseApproach]:
+    """Flatten the NeoWs nested-by-date structure into a sorted list of close approaches."""
+    near_earth_objects: dict[str, list] = payload.get("near_earth_objects") or {}
+    events: list[AsteroidCloseApproach] = []
+
+    for _date_str, asteroids in near_earth_objects.items():
+        for asteroid in asteroids:
+            # Each asteroid may have multiple close approaches; take the first one.
+            approaches = asteroid.get("close_approach_data") or []
+            approach = approaches[0] if approaches else {}
+
+            def _float(value: Any) -> Optional[float]:
+                try:
+                    return float(value) if value not in (None, "") else None
+                except (TypeError, ValueError):
+                    return None
+
+            miss_km = _float(
+                (approach.get("miss_distance") or {}).get("kilometers")
+            )
+            miss_au = _float(
+                (approach.get("miss_distance") or {}).get("astronomical")
+            )
+            velocity_kms = _float(
+                (approach.get("relative_velocity") or {}).get("kilometers_per_second")
+            )
+
+            diameter = asteroid.get("estimated_diameter", {}).get("meters", {})
+
+            raw_date = approach.get("close_approach_date")
+            parsed_date: Optional[date] = None
+            if raw_date:
+                try:
+                    parsed_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+                except ValueError:
+                    pass
+
+            neo_id = str(asteroid.get("id") or asteroid.get("neo_reference_id") or "unknown")
+            events.append(
+                AsteroidCloseApproach(
+                    id=neo_id,
+                    name=str(asteroid.get("name") or "unknown"),
+                    close_approach_date=parsed_date,
+                    miss_distance_km=miss_km,
+                    miss_distance_au=miss_au,
+                    relative_velocity_kms=velocity_kms,
+                    estimated_diameter_min_m=_float(diameter.get("estimated_diameter_min")),
+                    estimated_diameter_max_m=_float(diameter.get("estimated_diameter_max")),
+                    is_potentially_hazardous=bool(
+                        asteroid.get("is_potentially_hazardous_asteroid", False)
+                    ),
+                    absolute_magnitude_h=_float(asteroid.get("absolute_magnitude_h")),
+                    source_url=asteroid.get("nasa_jpl_url"),
+                )
+            )
+
+    return sorted(
+        events,
+        key=lambda e: (
+            e.close_approach_date or date.max,
+            e.miss_distance_km if e.miss_distance_km is not None else float("inf"),
+        ),
+    )
+
+
+async def get_near_earth_objects_result(days: int) -> AsteroidResponse:
+    """Return upcoming NEO close approaches for the next *days* days (max 7 per NeoWs limit)."""
+    # NeoWs feed endpoint accepts at most a 7-day window.
+    clamped_days = min(days, 7)
+    start_date = datetime.now(timezone.utc).date()
+    end_date = start_date + timedelta(days=clamped_days - 1)
+    payload = await fetch_neows_asteroids(start_date, end_date)
+    events = compact_asteroids(payload)
+
+    hazardous = [e for e in events if e.is_potentially_hazardous]
+    closest = min(
+        events,
+        key=lambda e: e.miss_distance_km if e.miss_distance_km is not None else float("inf"),
+        default=None,
+    )
+
+    summary = (
+        f"NASA NeoWs found {len(events)} asteroid close approach(es) between "
+        f"{start_date.isoformat()} and {end_date.isoformat()}, "
+        f"of which {len(hazardous)} are classified as potentially hazardous."
+        if events
+        else f"NASA NeoWs found no asteroid close approaches between "
+             f"{start_date.isoformat()} and {end_date.isoformat()}."
+    )
+    return AsteroidResponse(
+        source="NASA NeoWs (CNEOS)",
+        query_start=start_date,
+        query_end=end_date,
+        event_count=len(events),
+        hazardous_count=len(hazardous),
+        closest_miss_km=closest.miss_distance_km if closest else None,
         summary=summary,
         events=events,
         fetched_at=datetime.now(timezone.utc),

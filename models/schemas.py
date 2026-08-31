@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class SpaceDomain(str, Enum):
@@ -23,7 +23,8 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     location: Optional[Location] = None
 
-    @validator("message")
+    @field_validator("message")
+    @classmethod
     def message_must_not_be_blank(cls, value: str) -> str:
         normalized = value.strip()
         if not normalized:

@@ -8,7 +8,11 @@ from typing import Any, Optional
 from fastapi import HTTPException
 
 from config import WATSONX_TIMEOUT_SECONDS
-from services.nasa_service import get_space_weather_result, get_visible_comets_result
+from services.nasa_service import (
+    get_near_earth_objects_result,
+    get_space_weather_result,
+    get_visible_comets_result,
+)
 
 # ---------------------------------------------------------------------------
 # Tool schemas (OpenAI-compatible format expected by ibm-watsonx-ai)
@@ -65,18 +69,44 @@ COMET_TOOL = {
     },
 }
 
-TOOLS = [SPACE_WEATHER_TOOL, COMET_TOOL]
+NEO_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_near_earth_objects",
+        "description": (
+            "Queries UPCOMING near-Earth asteroid close approaches from NASA NeoWs (CNEOS). "
+            "Returns asteroid names, closest miss distances in km/AU, velocities, estimated "
+            "diameters, and whether each object is classified as potentially hazardous. "
+            "The window is limited to 7 days by the API."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7,
+                    "description": "Number of upcoming days to query for asteroid close approaches (max 7).",
+                }
+            },
+            "required": ["days"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+TOOLS = [SPACE_WEATHER_TOOL, COMET_TOOL, NEO_TOOL]
 
 # ---------------------------------------------------------------------------
 # System prompt
 # ---------------------------------------------------------------------------
 
-AGENT_SYSTEM_PROMPT = """"You are ASTRA, a space situational intelligence assistant. 
-Respond in the user's language. 
-Use get_space_weather when you need observed solar flares. 
+AGENT_SYSTEM_PROMPT = """You are ASTRA, a space situational intelligence assistant.
+Respond in the user's language.
+Use get_space_weather when you need observed solar flares.
 This tool ONLY queries the past (days that have already passed), never the future.
-If the user asks about 'this week', 'the past few days', or a similar range, interpret that as days=7 
-(or the number of days elapsed from the start of that week until today) and always use an integer between 1 and 30. 
+If the user asks about 'this week', 'the past few days', or a similar range, interpret that as days=7
+(or the number of days elapsed from the start of that week until today) and always use an integer between 1 and 30.
 Never leave days empty, as non-numeric text, or outside that range. Do not present historical observations as forecasts.
 If they ask about the future, explain that DONKI does not predict flares and limit your conclusions to the available data.
 Be brief, state dates, flare class, and potential limitations.
@@ -86,7 +116,13 @@ If the user asks about 'this week', 'the next few days', or a similar range, int
 and always use an integer between 1 and 30. Never leave days empty, as non-numeric text, or outside that range.
 Distance to Earth is only a rough proxy for observability: a close comet is not necessarily bright enough
 to see with the naked eye or binoculars. Be brief, state the comet's designation, close-approach date, and
-distance, and note that estimated brightness is not part of this data source."
+distance, and note that estimated brightness is not part of this data source.
+Use get_near_earth_objects when the user asks about asteroids, NEOs, NEAs, near-Earth objects,
+potentially hazardous asteroids, or asteroid close approaches.
+This tool queries UPCOMING asteroid close approaches (from today, up to 7 days ahead).
+Always use an integer between 1 and 7 for days. Report the asteroid name, miss distance in km and AU,
+velocity, estimated size range, and whether it is classified as potentially hazardous.
+Clarify that 'potentially hazardous' is an orbital classification, not a prediction of impact.
 """
 
 # ---------------------------------------------------------------------------
@@ -96,6 +132,7 @@ distance, and note that estimated brightness is not part of this data source."
 TOOL_RESULT_GETTERS = {
     "get_space_weather": get_space_weather_result,
     "get_visible_comets": get_visible_comets_result,
+    "get_near_earth_objects": get_near_earth_objects_result,
 }
 
 # ---------------------------------------------------------------------------
@@ -198,8 +235,10 @@ async def run_watsonx_agent(message: str) -> tuple[str, Optional[str], Optional[
         if isinstance(arguments, str):
             arguments = json.loads(arguments)
         days = int(float(arguments["days"]))
-        if not 1 <= days <= 30:
-            raise ValueError
+        # NEO tool is capped at 7 days by the NeoWs API; others accept up to 30.
+        max_days = 7 if tool_name == "get_near_earth_objects" else 30
+        if not 1 <= days <= max_days:
+            days = max(1, min(days, max_days))
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         logger.error(
             "Invalid tool_call arguments for %s: %r",

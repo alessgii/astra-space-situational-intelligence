@@ -249,6 +249,24 @@ document.addEventListener("DOMContentLoaded", () => {
             sources = ["IBM watsonx", toolResult.source];
         }
 
+        // Richer view when the asteroid tool actually ran (get_near_earth_objects -> NASA NeoWs)
+        if (payload.tool_used === "get_near_earth_objects" && toolResult) {
+            const closestKm = toolResult.closest_miss_km != null
+                ? `${Number(toolResult.closest_miss_km).toLocaleString('en-US', {maximumFractionDigits: 0})} km`
+                : "None detected";
+            data = [
+                { label: "Period queried", value: `${toolResult.query_start} → ${toolResult.query_end}` },
+                { label: "Asteroids found", value: String(toolResult.event_count) },
+                { label: "Potentially hazardous", value: String(toolResult.hazardous_count) },
+                { label: "Closest miss", value: closestKm },
+            ];
+            sources = ["IBM watsonx", toolResult.source];
+            // Show risk badge if any potentially hazardous object is in the window
+            if (toolResult.hazardous_count > 0) {
+                risk = { level: "high", label: "PHAs Detected" };
+            }
+        }
+
         return {
             title,
             answer: payload.answer,
